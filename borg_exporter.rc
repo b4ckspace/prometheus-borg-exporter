@@ -1,2 +1,2 @@
 BORG_PASSPHRASE=<your-passphrase>
-REPOSITORY=<your-repository>
+BORG_REPO=<your-repository>

@@ -2,30 +2,34 @@
 
 set -eu
 
-source /etc/borg_exporter.rc
+# if /etc/borg_exporter.rc exists, load it
+[ -e /etc/borg_exporter.rc ] && source /etc/borg_exporter.rc
 
-TEXTFILE_COLLECTOR_DIR=/var/lib/node_exporter/textfile_collector
-PROM_FILE=$TEXTFILE_COLLECTOR_DIR/bork.prom
+# accept env-variable, for example to run with multiple repos
+TEXTFILE_COLLECTOR_DIR="${TEXTFILE_COLLECTOR_DIR:-/var/lib/node_exporter/textfile_collector}"
+TEXTFILE_COLLECTOR_FILE="${TEXTFILE_COLLECTOR_FILE:-bork.prom}"
+
+PROM_FILE="$TEXTFILE_COLLECTOR_DIR/$TEXTFILE_COLLECTOR_FILE"
 
 TMP_FILE=$PROM_FILE.$$
 [ -e $TMP_FILE ] && rm -f $TMP_FILE
 
 HOSTNAME=$(hostname)
-ARCHIVES="$(BORG_PASSPHRASE=$BORG_PASSPHRASE borg list $REPOSITORY)"
+ARCHIVES="$(BORG_PASSPHRASE="$BORG_PASSPHRASE" BORG_REPO="$BORG_REPO" borg list)"
 COUNTER=0
 
 [ -e $TEXTFILE_COLLECTOR_DIR ] || mkdir -p $TEXTFILE_COLLECTOR_DIR
 
 COUNTER=$(echo "$ARCHIVES" | wc -l)
-LAST_ARCHIVE=$(BORG_PASSPHRASE=$BORG_PASSPHRASE borg list  --last 1 $REPOSITORY)
+LAST_ARCHIVE=$(BORG_PASSPHRASE="$BORG_PASSPHRASE" BORG_REPO="$BORG_REPO" borg list  --last 1)
 LAST_ARCHIVE_NAME=$(echo $LAST_ARCHIVE | awk '{print $1}')
 LAST_ARCHIVE_DATE=$(echo $LAST_ARCHIVE | awk '{print $3" "$4}')
 LAST_ARCHIVE_TIMESTAMP=$(date -d "$LAST_ARCHIVE_DATE" +"%s")
 CURRENT_DATE="$(date '+%Y-%m-%d %H:%M:%S')"
 NB_HOUR_FROM_LAST_BCK=$(dateutils.ddiff "$LAST_ARCHIVE_DATE" "$CURRENT_DATE" -f '%H')
 
-BORG_EXTRACT_EXIT_CODE=$(BORG_PASSPHRASE="$BORG_PASSPHRASE" borg extract --dry-run "$REPOSITORY::$LAST_ARCHIVE_NAME" > /dev/null 2>&1; echo $?)
-BORG_INFO=$(BORG_PASSPHRASE="$BORG_PASSPHRASE" borg info "$REPOSITORY::$LAST_ARCHIVE_NAME")
+BORG_EXTRACT_EXIT_CODE=$(BORG_PASSPHRASE="$BORG_PASSPHRASE" BORG_REPO="$BORG_REPO" borg extract --dry-run "::$LAST_ARCHIVE_NAME" > /dev/null 2>&1; echo $?)
+BORG_INFO=$(BORG_PASSPHRASE="$BORG_PASSPHRASE" BORG_REPO="$BORG_REPO" borg info "::$LAST_ARCHIVE_NAME")
 
 echo "borg_last_archive_timestamp{host=\"${HOSTNAME}\"} $LAST_ARCHIVE_TIMESTAMP" >> $TMP_FILE
 echo "borg_extract_exit_code{host=\"${HOSTNAME}\"} $BORG_EXTRACT_EXIT_CODE" >> $TMP_FILE
